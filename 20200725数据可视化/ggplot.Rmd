@@ -1,0 +1,283 @@
+---
+title: "R-ggplot2使用总结"
+author: ""
+date: "2020/7/21"
+output: 
+   html_document:
+    toc: true
+    theme: united
+---
+
+# 1、ggplot2
+
+ggplot2是R画图中非常重要的一个包相比于一般的plot包，它的功能更强，形式更加多样化，可以更好的实现R语言可视化的问题。这一篇文章主要说明一些基础的ggplot2包的使用的例子，对于更多参数的详细含义还是建议查看help文档，语言较为通俗，如有错误欢迎指出！
+
+
+```{r}
+#plot的简单使用
+x = rnorm(100)
+y = seq(1,100,1)
+plot(x,y)
+```
+
+
+首先ggplot2画图主要是运用的图层叠加的方法，通过一个一个的‘+’号将图层逐渐叠加形成最后我们需要的图像。ggplot2画图首先要有一个主函数：
+
+* ggplot() 
+
+然后叠加其他图层，实现画图：
+
+* geom_bar(),geom_point(),geom_line()等，适用于绘制柱状图，折线图，点图等
+
+* labs()对图像的轴进行设置
+
+* theme()对图像的样式进行设置
+
+当然针对不同的图形还会有一些更为特别的函数，将在后续的内容中涉及。本文主要将利用三种常用的图形进行说明，分别是柱状图，折线图，以及箱线图。ggplot2画图所用的程序其实大同小异所以可以自行根据这三个图形进行拓展。
+
+为更好的说明绘图方法，这里采用一个自己制作的无实际意义的数据集。由于本文的重点是画图，所以所用数据经过处理可以直接使用进行画图。
+
+## 1.1准备工作
+```{r,warning= F,message= F}
+# 清除历史记录
+rm(list=ls())                      
+# 导入使用的包
+library(openxlsx)#导入数据
+library(ggplot2)#绘图
+library(tidyverse)
+library(broom)
+```
+
+## 1.2通用的参数解释
+* df %>%:表示作图所需要的数据均来自df数据集，这一语句需要tidyverse包的支持。(安装和导入包的方法)
+* ggplot(...)：这一语句说明了ggplot2的数据层和映射层,单有此层是没有图像展示的。
+* labs(...)：对图像的坐标轴的命名。
+* theme(...)：图表主题的设定。本文的设定中对坐标轴字体大小以及坐标轴标题的字体大小，以及背景设置为透明，轴线设置为黑色等等，ggplot也有默认的主题设定，更多的可以自行搜索。
+
+# 2、柱状图
+
+## 2.1柱状图参数解释
+首先介绍最常使用的柱状图，这一图形绘制主要使用了geom_bar(...)函数，通过使用不同的参数设置可以得到不同的柱状图，条形图，堆积柱状图等等，常用的中参数含义如下表所示：
+![avatar](图1.jpg)
+
+
+
+
+## 2.2单组柱状图
+* 为展示具体的使用方法，这一部分尝试绘制2019年index排名前十的地区柱状图，导入数据并展示数据集的前5行，然后绘制柱状图，并且按照index的降序排列。
+
+```{r}
+df1<-read.xlsx("mydata.xlsx",1)                             #导入index数据
+df1[1:5,]                                                #数据展示
+df1 %>%
+  ggplot()+
+  geom_bar(aes(x = factor(reorder(area, -index2019)),      #设置x为因子型变量，按index降序排列
+               y=index2019,fill=area),
+           position="dodge",                            #柱状图
+           stat="identity",             
+           width=0.5,fill="gold",alpha = 1)+          #柱体宽度0.5，填充金色，透明度0.9
+  labs(x = "地区", y = "2019年index") +                    #设置x,y轴
+  theme(axis.text = element_text(face = "bold",size=13), #设置坐标轴文字大小和样式
+      axis.title = element_text(face = "bold",size=13),  #设置坐标轴标题文字大小和样式
+      panel.background = element_rect(fill = "transparent"), #设置背景
+      panel.border=element_rect(fill='transparent', 
+                                color='transparent'),
+      axis.line = element_line(color = "black"))         #设置轴线
+      #+coord_flip()                                       #加入可以转换为条形图
+#+一定要在上一行的结束
+```
+
+对于多组柱状图时，则首先需要注意数据集的形式，不同于一般的Excel绘图的数据格式，需要将所有类型的数据都在一列，增加分类列以区别分组。然后会用到一些函数对不同分组的分组进行设置。
+
+## 2.3双组柱状图
+
+* 双组的柱状图也常常用来对比两类事物的不同之处，为展示这一方法尝试绘制2019年index排名前十的地区的2018和2019index的柱状图。和单种柱状图不同之处在于对于不同分组的数据要设置颜色等等,所以这里引入的新的函数scale_fill_manual通过设置breaks,values,以及labels即可完成对于不同分组的数据的图像的设定。
+
+```{r}
+df2<-read.xlsx("mydata.xlsx",2)                       #导入index数据
+df2[1:5,]                                             #数据展示
+#注意数据形式
+
+df2 %>%
+  ggplot() +
+  geom_bar(aes(x = factor(reorder(area, -index)),      # 横轴为地区，按照index水平排列
+               y = index, fill = factor(year)),        # 纵轴为index，按照年份分组
+               stat="identity", position = "dodge") +
+  labs(x = "地区", y = "index", fill = "年份") + # 添加坐标轴标签
+  scale_fill_manual(breaks = c(2018, 2019),          #设置不同组的分组
+                    values = c("gray40", "gold"),    #设置不同组的颜色
+                    labels = c('2018','2019')) +     #设置不同组的图例标签
+    theme(axis.text = element_text(face = "bold",size=9), #仍然是设置主题
+          axis.title = element_text(face = "bold",size=12),
+          panel.background = element_rect(fill = "transparent"),
+          panel.border=element_rect(fill='transparent', 
+                                    color='transparent'),
+          axis.line = element_line(color = "black"))
+```
+
+
+
+## 2.4 堆积组柱状图
+* 堆积柱状图和双组柱状图非常相似仅有一个参数的变化：position。
+
+```{r}
+df2<-read.xlsx("mydata.xlsx",2)                          #导入index数据
+df2[1:5,]                                             #数据展示
+
+df2 %>%
+  ggplot() +
+  geom_bar(aes(x = factor(reorder(area, -index)),      # 横轴为地区，按照index水平排列
+               y = index, fill = factor(year)),        # 纵轴为index，按照年份分组
+               stat="identity",position ='stack' ) +
+  labs(x = "地区", y = "index", fill = "年份") + # 添加坐标轴标签
+  scale_fill_manual(breaks = c(2018, 2019),          #设置不同组的分组
+                    values = c("gray40", "gold"),    #设置不同组的颜色
+                    labels = c('2018','2019')) +     #设置不同组的图例标签
+    theme(axis.text = element_text(face = "bold",size=9), #仍然是设置主题
+          axis.title = element_text(face = "bold",size=12),
+          panel.background = element_rect(fill = "transparent"),
+          panel.border=element_rect(fill='transparent', 
+                                    color='transparent'),
+          axis.line = element_line(color = "black"))
+```
+
+
+# 3、折线图
+
+## 3.1折线图参数解释
+折线图作为反映数据变化趋势的重要图表也常常被用在数据分析中，
+与python不同的地方是，python用一个函数plot可以把点和线都画了，这里需要分别绘制点图和线图，所以这一部分包含了两种geom函数，主要用到的函数为：
+
+* ggplot()中加入group = 1语句说明数据均为一组，因为本数据集中年份按文本数据处理，所以需要这一参数才能绘制折线图。
+
+* geom_line(...)表示绘制折线图，col为颜色设定，size为线条粗细。
+
+* geom_point(...)表示绘制点，size为点的大小,shape为点的形状，col为颜色设定。
+
+
+
+## 3.2单条折线图
+* 这一部分尝试绘制2010-2019年十年间的index的折线图,首先导入数据并展示数据的前5行，然后绘制图像。
+```{r}
+df3<-read.xlsx("mydata.xlsx",3)    #导入index数据
+df3[1:5,] 
+
+df3 %>%
+  ggplot(mapping = aes(x=Time, y=allindex,group=1))+
+  geom_line(col = '#029bbb',size = 0.7)+ 
+  geom_point(size=4, shape=20,col = '#029bbb')+
+  labs(x = "时间", y = "全国index(万亿)") +
+  theme(axis.text = element_text(face = "bold",size=13), 
+      axis.title = element_text(face = "bold",size=13),
+      panel.background = element_rect(fill = "transparent"),
+      panel.border=element_rect(fill='transparent', color='transparent'),
+      axis.line = element_line(color = "black"))
+
+```
+
+对于多条折线图时，与柱状图一致，首先需要注意数据集的形式，然后会用的函数有：
+
+* ggplot()中加入group语句确定分组。
+
+* geom_line()和geom_point()语句中均加入aes(color=class)语句，设置不同颜色。
+
+
+
+## 3.3多条折线图 
+如果我们想绘制有多条折线的折线图，则需要注意数据的格式，以及加入一些分类的语句帮助我们绘制多条折线图，这里我们采用北京和上海的2010-2019年十年间的index绘制折线图。
+
+```{r}
+df4<-read.xlsx("mydata.xlsx",4)    #导入index数据
+df4[1:5,]
+
+df4 %>%
+  ggplot(mapping = aes(x=Time,y=index,group=class,shape = class))+
+  geom_line(aes(color=class))+ 
+  geom_point(size=4,aes(color=class))+
+  labs(x = "时间", y = "index") +
+  theme(axis.text = element_text(face = "bold",size=13), 
+      axis.title = element_text(face = "bold",size=13),
+      panel.background = element_rect(fill = "transparent"),
+      panel.border=element_rect(fill='transparent', color='transparent'),
+      axis.line = element_line(color = "black"))
+```
+
+
+
+# 4、箱线图
+
+## 4.1箱线图参数解释
+箱线图也是统计中比较重要的一类图形，是一种用作显示一组数据分散情况资料的统计图。这里用到的函数有：
+
+* geom_boxplot()中aes()设置x,y轴数据，其中x是分类数据，然后fill参数表示按分类填涂颜色,一组时可以直接等于颜色，varwidth表示是否按数据量设定箱体宽度。
+
+* scale_fill_manual()表示对箱体颜色的设定，首先breaks表示分组，valuess设定每一组的颜色，labels表示分组标签的设定
+
+
+
+## 4.2单箱线图
+
+* 这一部分尝试绘制2019年31个地区的index的箱线图,31个地区可以被分为4类，(A,B,C,D)。根据分组后，绘制四个区域的2019年index箱线图。
+ 
+```{r}
+df5 <- read.xlsx("mydata.xlsx",5)    #导入index数据
+df5[1:5,]
+#数据的形式仍然是面板数据的形式
+
+df5 %>%
+  # 画图
+  ggplot() +
+    # 横轴为地区
+    # 纵轴为2019年index
+    geom_boxplot(aes(x = factor(class, levels = c("A", "B", "C","D")),
+                     y = index2019,fill = "gold"),varwidth = T) +#箱体宽度
+    # 添加坐标轴标签
+    labs(x = "四大地区", y = "2019年index") +
+    # 设置箱子颜色
+    scale_fill_manual(breaks = 1, values = "gold") +
+    # 调整画板主题及字体大小
+    theme(axis.text = element_text(face = "bold",size=10), 
+          axis.title = element_text(face = "bold",size=12),
+          panel.background = element_rect(fill = "transparent"),
+          panel.border=element_rect(fill='transparent', color='transparent'),
+          axis.line = element_line(color = "gray40"))
+
+```
+
+对于多组箱线图时，与柱状图一致，首先需要注意数据集的形式，然后通过函数对不同分组进行设置。
+
+## 4.3双箱线图
+* 这一部分尝试绘制2018,2019年31个地区的index的箱线图,仍然采用4个分组，对比2018和2019两个年度的变化。
+
+```{r}
+df6 <- read.xlsx("mydata.xlsx",6)    #导入index数据
+df6[1:5,]
+
+df6 %>%
+  # 画图
+  ggplot() +
+    # 横轴为地区
+    # 纵轴为index
+    geom_boxplot(aes(x = factor(class, levels = c("A", "B", "C","D")), 
+                     y = index, fill = factor(year)),varwidth = T) +
+    # 添加坐标轴标签
+    labs(x = "地区", y = "index", fill = '年份') +
+    # 设置箱子颜色
+    scale_fill_manual(breaks = c(2018, 2019), 
+                      values = c("gray40", "gold"),
+                      labels = c('2018','2019')) +
+    # 调整画板主题及字体大小
+    theme(axis.text = element_text(face = "bold",size=9), 
+          axis.title = element_text(face = "bold",size=12),
+          panel.background = element_rect(fill = "transparent"),
+          panel.border=element_rect(fill='transparent', color='transparent'),
+          axis.line = element_line(color = "black"))
+```
+
+
+
+# 总结
+上文介绍了关于ggplot2包的一部分函数，适用于一般的绘图要求，关于更多的设定大家可以参考help文档，或者在CSDN的网站查询，这一网站上有很多用户的总结，非常实用。
+
+
+以上是讲座的全部内容，因为我对于数据可视化的操作也未达到炉火纯青的水平，所以过程中可能会存在一些错误，如有错误欢迎大家指正！
