@@ -1,0 +1,254 @@
+---
+title: "文本分析"
+author: "高攀"
+date: "2020/8/16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 导入关键的程序包
+```{r}
+rm(list = ls())
+library(readxl)##文本数据
+library(plyr)##数据处理
+library(stringr)#字符
+library(jiebaR)##分词
+library(wordcloud2)##画图
+library(tm)##词矩阵
+```
+
+## jiebaR包关键函数介绍与演练
+```{r}
+# #分词，worker 使用默认
+# 分词器 = worker()
+# worker(type = "mix", dict = DICTPATH, hmm = HMMPATH, user = USERPATH,
+#        idf = IDFPATH, stop_word = STOPPATH, write = T, qmax = 20, topn = 5,
+#        encoding = "UTF-8", detect = T, symbol = F, lines = 1e+05,
+#        output = NULL, bylines = F, user_weight = "max")
+# 
+# type：默认使用混合法的返回类型；
+# dict：指定主词典的路径（默认在哪？）；(指定的专业词)
+# hmm：指定隐马尔科夫模式的路径；
+# user：可以路径的方式自定义属于用户自己的字典；
+# idf：指定逆文档频次的路径；（词语权重）
+# stop_word：指定停止词的路径；
+# write：是否将输出结果写入文件；
+# qmax：在使用查询模式时，可指定最大的词长度；
+# topn：指定提取文档关键词的个数；
+# encoding：指定输入文件的编码；
+# lines：指定最大的读取行数；
+# output：指定输出的文件路径；
+
+
+# segment("这是一段测试文本！", 分词器)
+# 举例
+sentence = '我最喜欢的音乐人是周杰伦，他的歌《等你下课》真的是太好听了！'
+# worker函数什么都不设置
+engine =worker()
+# segment(code, jiebar, mod = NULL)
+# code：中文句子；
+# jiebar：设置分词的引擎worker
+# mod：指定返回分词的结果类型(mp/hmm/mix/query)，如最大概率分词法（基于Trie树）、隐马尔科夫型、混合法（结合前两种方法）、查询法（结合混合法，并穷举所有可能的长词组合）
+# 混合模式
+segment(sentence, engine)
+
+```
+
+## 添加新词到已经新建的分词器中 new_user_word()
+```{r}
+# new_user_word(worker, words, tags = rep("n", length(words)))
+# worker：已经指定好的分词引擎；
+# words：自定义词；
+# tags：默认为名词词性
+new_user_word(engine, c('等你下课','音乐人'))
+segment(sentence, engine)
+```
+
+## 定义自己的字典
+```{r}
+engine2= worker(user = 'D:\\文本分析\\mydict.txt', encoding = 'UTF-8')
+segment(sentence, engine2)
+# words <- readLines(file.choose(), encoding = 'UTF-8')
+# new_user_word(engine, words)
+# segment(sentence, engine)
+```
+
+## 定义自己的字典（速度更快）
+```{r}
+words=readLines('D:\\文本分析\\mydict.txt', encoding = 'UTF-8')
+new_user_word(engine, words)
+segment(sentence, engine)
+```
+
+## 分行输出
+```{r}
+# #分行输出 $bylines
+# 分词器 = worker()
+# 分词器$bylines = TRUE
+# segment(c("这是第一行文本。","这是第二行文本。"), 分词器)
+# #在新建 worker 时设置 bylines
+# 分词器 = worker(bylines = TRUE)
+# segment(c("这是第一行文本。","这是第二行文本。"), 分词器)
+engine= worker(bylines = TRUE)
+sentence = c('我最喜欢的音乐人是周杰伦，','他的歌《等你下课》真的是太好听了！')
+new_user_word(engine, c('等你下课','音乐人'))
+segment(sentence, engine)
+```
+
+```{r}
+# #保留符号 $symbol
+# 分词器 = worker()
+# 分词器$symbol = TRUE
+# segment(c("Hi，这是第一行文本。"), 分词器)
+# #重设为不保留符号
+# 分词器$symbol = FALSE
+# segment(c("Hi，这是第一行文本。"), 分词器)
+# #或者在新建 worker 时设置 symbol
+# 分词器 = worker(symbol = TRUE)
+# segment(c("Hi，这是第一行文本。"), 分词器)
+# segment(c("。，。；las"), 分词器)
+# 分词器 = worker(symbol = FALSE)
+# segment(c("Hi，这是第一行文本。"), 分词器)
+# segment(c("。，。；las"), 分词器)
+```
+
+## 删除停止词
+```{r}
+engine3= worker(user = 'D:\\文本分析\\mydict.txt',
+                stop_word = 'D:\\文本分析\\stopwords.txt')
+segment(sentence, engine3)
+```
+
+```{r}
+# 删除停止词
+removeWords =function(target,stop){
+  target = target[target%in%stop==FALSE]
+  return(target)
+}
+
+stopwords=readLines('D:\\文本分析\\stopwords.txt', encoding = 'UTF-8')
+# words=readLines('D:\\文本分析\\mydict.txt', encoding = 'UTF-8')
+# new_user_word(engine, words)
+removeWords(segment(sentence, engine), stopwords)
+```
+
+
+## 删除数字
+```{r}
+words='华为手机售价6888'
+str_replace_all(words, '[0-9]+', '')
+```
+
+
+## 关键词
+```{r}
+#提取关键词，基于 IDF 词典，topn 控制提取数量第一行代表 IDF（逆文档频率）
+#第二行为具体关键词，关键词提取建立在使用是在马尔科夫链 HMM 模型的基础上，所以
+#已经有 hmm 的语料库，在这语料库的基础上计算新来的文档文字的IDF 值来对核心词进行筛选
+extractor= worker("keywords", topn =4)##提取器
+keywords("我是北京师范大学统计学院的研究生", extractor)
+#对已经分好词的文本向量
+# vector_keywords(code, jiebar)
+# code：segment对象
+# jiebar：设置为keywords类型的引擎
+vector_keywords(segment("我是北京师范大学统计学院的研究生", worker()), worker('keywords'))
+```
+
+
+## 读取数据
+```{r}
+data=read_excel('D:\\文本分析\\文本数据.xlsx')
+# data <- read_excel("name.xlsx",sheet=1,col_names = T,col_types = NULL ,na="", skip=0)
+# data <- read.table("name.txt",header = T,sep = "")
+# read.csv(file.choose(),header = F,sep = ",")#逗号可删除
+# data <-data.frame(data$a,data$b)#合并成数据框结构
+
+#将文章"\n\r"的字符去除
+articles=as.character(sapply(data$article, str_replace_all, '[\\s]*', ''))
+```
+
+
+## 绘制文字云
+```{r}
+# wordcloud2(data, backgroundColor = "white",
+#            shape = 'circle', figPath = NULL)
+# data：包含词及词频的数据框
+# backgroundColor：指定词云的背景色
+# shape：词云的形状（圆形、星形、菱形等）
+# figPath：自定义的词云背景
+# 读入停止词
+mystopwords=readLines('D:\\文本分析\\mystopwords.txt', encoding = 'UTF-8')
+# 加载切词引擎
+engine=worker()
+# 删除停止词
+#str_replace_all(articles[7], '[0-9]+', '')
+words= removeWords(segment(articles[7], engine), mystopwords)
+# 计算词频
+wf = as.data.frame(table(words))
+wf=wf[order(wf$Freq, decreasing = TRUE), ]
+#subset(wf, nchar(as.character(wf$word))>1 & wf$Freq>=4))
+wordcloud2(wf, backgroundColor = 'black')
+#wf
+```
+
+
+## 词长与词频
+```{r}
+# data.frame(subset(wf, nchar(as.character(wf$word))>1 & wf$Freq>=4))%>%
+#   wordcloud2(color = 'random-dark',backgroundColor = "whirt" )
+## 形状
+# data.frame(subset(wf, nchar(as.character(wf$word))>1 & wf$Freq>=4))%>%
+#   wordcloud2(color = 'random-dark',backgroundColor = "whirt",
+#              shape = 'star' )
+#wordcloud2(wf, backgroundColor = 'black',figPath = 'D:\\文本分析\\QQ.jpg')
+
+```
+
+# 词频统计
+```{r}
+# engine=worker()
+# segment(articles[7],engine)
+# freq(segment(articles[7],engine))
+```
+
+# 分词并重新构建词语料库
+```{r}
+# plyr数据处理，还有dplyr
+segwords=llply(articles, segment, engine)
+# 删除停止词
+segwords=llply(segwords, removeWords, mystopwords)
+segwords = sub('^..','',as.character(segwords)) # 删除前两个字符串，为了把c删掉
+# 重新构造词的语料库
+segwords=Corpus(VectorSource(segwords))
+segwords=tm_map(segwords, removeNumbers) # 去除数字
+segwords=tm_map(segwords, removePunctuation) # 去除标点符号
+segwords=tm_map(segwords, stripWhitespace) # 去除空白
+inspect(segwords)
+```
+
+## 创建文档-词条矩阵（TF-IDF）
+```{r}
+dtm=DocumentTermMatrix(x=segwords, control = list(weighting=weightTfIdf))
+dtm
+#Sparsity 稀疏率 无意义的单元格
+# dtm <- removeSparseTerms(x = dtm, sparse = 0.8)##上限
+# dtm
+```
+
+```{r}
+# kmeans聚类
+fit1=kmeans(dtm, centers =4)
+fit1$cluster
+```
+
+## 针对文章与文章所属问题开发的包stylo
+```{r}
+# setwd("D:\\文本分析\\数据")
+# library(stylo)
+# stylo()
+```
+
+
